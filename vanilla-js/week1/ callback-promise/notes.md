@@ -82,6 +82,7 @@ Promise.all([fetchData1(), fetchData2()]).then(([result1, result2]) => {
 
 모든 프로미스가 완료될 때까지 기다렸다가 각 프로미스의 결과(성공 또는 실패)를 배열로 반환
 Promise.all보다는 이걸 사용하는게 더 정교하게 비동기 관리를 할 수 있음
+Promise.all은 하나라도 실패하면 즉시 중단하지만, Promise.allSettled는 실패해도 나머지 계속 진행
 
 ```javascript
 const promises = [
