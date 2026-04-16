@@ -255,3 +255,32 @@ function DraggableList() {
 
 export default DraggableList;
 ```
+
+# WeakMap
+
+**기본 특징**
+
+1. 키(key)로만 약한 참조(Weak Reference)를 갖는 Map.
+2. 키가 GC 대상이 되면, 해당 엔트리도 자동 삭제
+3. Map과 달리 **키는 반드시 객체**
+
+**힙 메모리 누수 문제와 WeakMap을 통한 해결책**
+힙 메모리 누수는 JavaScript에서 더 이상 사용되지 않는 객체가
+가비지 컬렉션되지 않고 메모리를 계속 차지하는 현상
+
+### 캐시 시스템에서 메모리 누수 방지
+
+```javascript
+const cache = new WeakMap(); // 키가 GC되면 값도 자동 제거
+
+function getHeavyData(obj) {
+  if (!cache.has(obj)) {
+    const result = heavyCalculation(obj);
+    cache.set(obj, result); // obj가 살아있는 동안만 캐시 유지
+  }
+  return cache.get(obj);
+}
+```
+
+1. 일반 Map을 사용하면 obj가 사라져도 cache에서 제거되지 않아 누수 발생
+2. WeakMap을 사용하면 obj가 GC되면 캐시도 자동 정리됨
