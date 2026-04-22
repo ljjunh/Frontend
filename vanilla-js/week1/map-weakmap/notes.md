@@ -284,3 +284,157 @@ function getHeavyData(obj) {
 
 1. 일반 Map을 사용하면 obj가 사라져도 cache에서 제거되지 않아 누수 발생
 2. WeakMap을 사용하면 obj가 GC되면 캐시도 자동 정리됨
+   **예시**
+
+```javascript
+// Map의 문제
+const cache = new Map();
+
+let user = { name: "jun" };
+cache.set(user, "무거운 계산 결과");
+
+user = null;
+// 나는 user 다 썼으니까 지우려고 null했지만
+// cache가 아직 {name:'jun'}을 키로 붙잡고 있음
+// GC가 지우고 싶어도 못지움 -> 메모리 누수
+
+// WeakMap은 약하게 잡고있음
+const cache2 = new WeakMap();
+
+let user2 = { name: "jun" };
+cache2.set(user2, "무거운 계산 결과");
+
+user2 = null;
+// WeakMap은 약한 참조라 GC막지않음
+```
+
+### DOM 요소와 메타데이터 연결 시
+
+```javascript
+const domMetadata = new WeakMap(); // DOM이 제거되면 메타데이터도 삭제
+
+const element = document.getElementById("my-element");
+domMetadata.set(element, { clicks: 0 });
+
+element.addEventListener("click", () => {
+  const meta = domMetadata.get(element);
+  meta.clicks++;
+});
+// element가 DOM에서 제거되면, domMetadata의 엔트리도 자동 삭제됨
+```
+
+### WeakMap 한계와 대안
+
+1. 키만 약한 참조 -> 값은 GC 대상이 아님.
+   값이 큰 데이터라면, 키가 사라져도 값은 메모리에 남을 수 있음
+2. 순회 불가능 -> 캐시 전체를 조회할 수 없음
+
+**대안: WeakRef + FinalizationRegistry(ES2021)**
+
+```javascript
+const registry = new FinalizationRegistry((heldValue) => {
+  console.log(`${heldValue}가 GC되었습니다`);
+});
+
+const obj = { data: "Large Object" };
+registry.register(obj, "obj"); // obj가 GC되면 콜백 실행
+
+const weakRef = new WeakRef(obj); // 약한 참조 생성
+```
+
+- WeakRef: 객체에 대한 약한 참조 생성
+- FinalizationRegistry: 객체가 GC될때 콜백 실행(GC 클린업 콜백 함수)
+
+### FinalizationRegistry는 뭔가요?
+
+FinalizationRegistry는 JavaScript의 기능으로,
+객체가 가비지 컬렉션될 때 콜백 함수를 실행할 수 있게 해줌
+ES2021(ES12)에 도입되었으며, 메모리 관리와 관련된 고급 시나리오에서 활용됨
+![alt text](image.png)
+
+### FinalizationRegistry 기본 개념
+
+- 역할
+
+1. 객체가 GC되면 등록된 콜백을 호출
+2. 주로 리소스 정리 (예: 파일 핸들, 네트워크 연결 해제)에 사용
+
+- 작동 조건
+
+1. 객체에 더 이상 강한 참조가 없어야 함
+2. GC 실행 시점은 JavaScript 엔진에 의존적이므로 즉시 실행되지 않을 수 있음
+
+### FinalizationRegistry 사용 방법
+
+```javascript
+// 레지스트리 생성
+const registry = new FinalizationRegistry((heldValue) => {
+  console.log(`${heldValue}가 GC되었습니다`);
+});
+
+// 객체 등록
+const obj = { data: "Large Object" };
+registry.register(obj, "obj의 설명");
+// registry.register(등록대상, 콜백에 넘길값, 취소할때 쓸 식별자)
+
+// 등록 취소 (선택 사항)
+registry.unregister(token); // 등록 시 사용한 토큰으로 취소
+```
+
+### 실제 예제: 파일 핸들러 정리
+
+시나리오: 파일을 열고 사용 후 자동으로 리소스를 해제하려 할 때
+
+```javascript
+const fs = require("fs");
+const fileRegistry = new FinalizationRegistry((filePath) => {
+  console.log(`파일 ${filePath} 핸들러가 GC되었습니다. 리소스 정리`);
+  try {
+    fs.closeSync(filePath);
+  } catch (error) {
+    console.error(`파일 ${filePath} 닫기 실패: `, error.message);
+  }
+});
+
+async function openFile(path) {
+  try {
+    const fileHandle = await fs.promises.open(path, "r");
+    fileRegistry.register(fileHandle, path);
+    return fileHandle;
+  } catch (error) {
+    console.error(`파일 ${path} 열기 실패: `, error.message);
+    throw error;
+  }
+}
+
+// 사용 예시
+async function main() {
+  try {
+    let handle = await openFile("example.txt");
+    // 파일 작업 수행
+    const content = await handle.readFile();
+    console.log("파일 내용: ", content.toString());
+  } catch (error) {
+    console.error("에러 발생: ", error.message);
+  }
+}
+
+main();
+```
+
+### 실제 예제: WeakRef와 함께 사용
+
+WeakRef로 약한 참조 생성하고 registry를 연결한 패턴
+아래와 같이 진행하면 일반적으로 로그가 나타나지 않음
+
+```javascript
+const registry = new FinalizationRegistry((heldValue) => {
+  console.log(`객체 ${heldValue} 제거됨`);
+});
+
+let obj = { key: "value" };
+const ref = new WeakRef(obj);
+
+registry.register(obj, "obj 참조");
+obj = null; // 강한 참조 제거
+```
