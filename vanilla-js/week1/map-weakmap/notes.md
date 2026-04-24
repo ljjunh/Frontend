@@ -438,3 +438,28 @@ const ref = new WeakRef(obj);
 registry.register(obj, "obj 참조");
 obj = null; // 강한 참조 제거
 ```
+
+**코드에서 FinalizationRegistry가 제대로 작동하지 않는 것처럼 보이는 이유**
+가비지 컬렉션이 즉시 실행되지 않기 때문. 가비지 컬렉션은 비결
+(non-deterministic)이며, 메모리 부족 상황이 발생할 때만 실행
+
+### 그런데 WeakRef는 뭔가요?
+
+- WeakRef(ES2021)
+  역할: 객체에 대한 약한 참조(Weak Reference) 생성
+- FinalizationRegistry와의 차이점:
+  WeakRef는 객체의 생존 여부만 추적
+  FinalizationRegistry는 GC시 콜백 실행
+
+```javascript
+let obj = { data: "test" };
+const weakRef = new WeakRef(obj);
+console.log(weakRef.deref()); // 객체 접근 ({data:"test"})
+obj = null; // GC 후 weakRef.deref()는 undefined 반환
+
+console.log(weakRef.deref()); // ???
+```
+
+obj = null로 바뀌었지만 바로 console.log를 해볼 경우에는
+기존값이 그대로 유지되는 걸 볼 수 있음
+이는 아직 GC가 이뤄지지 않았기 때문임
